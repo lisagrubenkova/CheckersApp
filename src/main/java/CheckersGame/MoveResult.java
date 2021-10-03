@@ -1,3 +1,5 @@
+package CheckersGame;
+
 public class MoveResult {
     private MoveType type;
     private Piece piece;

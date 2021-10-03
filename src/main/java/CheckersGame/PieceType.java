@@ -1,3 +1,5 @@
+package CheckersGame;
+
 public enum PieceType {
     BLACK(1), WHITE(-1);
 
