@@ -23,8 +23,8 @@ public class Field extends GridPane {
     private Set<Piece> capturedCheckers = new HashSet<>();
 
     Field() {
-        Image blackCheckerImg = new Image("CheckersApp/src/main/java/Images/blackChecker.png");
-        Image whiteCheckerImg = new Image("CheckersApp/src/main/java/Images/whiteChecker.png");
+        Image blackCheckerImg = new Image("src/main/java/Images/blackChecker.png");
+        Image whiteCheckerImg = new Image("src/main/java/Images/whiteChecker.png");
         this.setPrefSize(fieldSize, fieldSize);
         this.relocate(38.0, 38.0);
         selection.setFitHeight(fieldSize / 8.0);
