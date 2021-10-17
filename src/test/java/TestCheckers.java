@@ -129,10 +129,7 @@ public class TestCheckers extends Field {
     @Test
     @RepeatedTest(500)
     public void testMovementsChain() {
-        int iter = 0;
         while (true) {
-            System.out.println("iter: " + iter);
-            iter++;
             int clickedX = new Random().nextInt(8), clickedY = new Random().nextInt(8);
             if (!tileContainsChecker(clickedX, clickedY)) return;
             if (pieces[clickedY][clickedX].type != playerSide) return;
