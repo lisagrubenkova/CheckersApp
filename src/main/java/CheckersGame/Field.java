@@ -1,164 +1,171 @@
 package CheckersGame;
 
-import javafx.scene.image.Image;
-import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.ColumnConstraints;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.RowConstraints;
+import CheckersGame.view.FieldView;
+import CheckersGame.view.SelectionView;
 
 import java.util.HashSet;
 import java.util.Set;
 
-public class Field extends GridPane {
-    private static final double fieldSize = 560.0;
-    private Selection selection = new Selection();
-    private Piece[][] pieces = new Piece[8][8];
-    private PieceType playerSide = PieceType.WHITE;
+public class Field {
+    protected OnGameFinishedListener onGameFinishedListener;
 
-    private boolean mustKill = false;
-    private boolean multipleKill = false;
+    protected final Selection selection;
+    protected final Piece[][] pieces = new Piece[8][8];
+    protected PieceType playerSide = PieceType.WHITE;
 
-    private Set<Piece> whiteCheckers = new HashSet<>();
-    private Set<Piece> blackCheckers = new HashSet<>();
-    private Set<Piece> capturedCheckers = new HashSet<>();
+    protected boolean mustKill = false;
+    protected boolean multipleKill = false;
 
-    Field() {
-        Image blackCheckerImg = new Image("src/main/java/Images/blackChecker.png");
-        Image whiteCheckerImg = new Image("src/main/java/Images/whiteChecker.png");
-        this.setPrefSize(fieldSize, fieldSize);
-        this.relocate(38.0, 38.0);
-        selection.setFitHeight(fieldSize / 8.0);
-        selection.setFitWidth(fieldSize / 8.0);
+    protected final Set<Piece> whiteCheckers = new HashSet<>();
+    protected final Set<Piece> blackCheckers = new HashSet<>();
 
-        for(int i = 0; i < 8; i++) {
-            this.getColumnConstraints().add(new ColumnConstraints(fieldSize / 8.0));
-            this.getRowConstraints().add(new RowConstraints(fieldSize / 8.0));
-        }
+    protected final FieldView view;
+
+    public Field(FieldView view, SelectionView selectionView) {
+        this.view = view;
+        selection = new Selection(selectionView);
+
         for(int i = 0; i < pieces.length; i++) {
             int j = (i % 2 == 0) ? 1 : 0;
             while(j < pieces.length) {
                 if (i < 3) {
-                    pieces[i][j] = new Piece(PieceType.BLACK, blackCheckerImg, fieldSize, i, j);
-                    this.add(pieces[i][j], j, i);
+                    pieces[i][j] = new Piece(PieceType.BLACK, j, i);
+                    view.showPiece(pieces[i][j]);
                     blackCheckers.add(pieces[i][j]);
                 }
                 else if (i > 4) {
-                    pieces[i][j] = new Piece(PieceType.WHITE, whiteCheckerImg, fieldSize, i, j);
-                    this.add(pieces[i][j], j, i);
+                    pieces[i][j] = new Piece(PieceType.WHITE, j, i);
+                    view.showPiece(pieces[i][j]);
                     whiteCheckers.add(pieces[i][j]);
                 }
                 j += 2;
             }
-            this.setOnMouseClicked((final MouseEvent click) -> {
-                int row = (int) (click.getY() * 8 / fieldSize);
-                int col = (int) (click.getX() * 8 / fieldSize);
-                if (tileContainsChecker(row, col) && !multipleKill)
-                    selectChecker(pieces[row][col]);
-                else moveType(row, col);
+            view.setOnTileSelectedListener((X, Y) -> {
+                if (tileContainsChecker(X, Y) && !multipleKill) {
+                    if (pieces[Y][X].hasType(playerSide))
+                        selection.setTargetAndSelect(pieces[Y][X]);
+                }
+                else moveType(X, Y);
             });
         }
     }
 
-    private void selectChecker(Piece piece) {
-        if (piece.hasType(playerSide)) {
-            selection.target = piece;
-            this.getChildren().remove(selection);
-            this.add(selection, piece.X, piece.Y);
-        }
-    }
 
-    private boolean tileExists(int X, int Y) {
+    protected boolean tileExists(int X, int Y) {
         return X >= 0 && X < 8 && Y >= 0 && Y < 8;
     }
 
-    private  boolean tileContainsChecker(int X, int Y) {
-        return pieces[X][Y] != null;
+    protected boolean tileContainsChecker(int X, int Y) {
+        return pieces[Y][X] != null;
     }
 
-    private void moveType(int X, int Y) {
+    protected void moveType(int X, int Y) {
         if ((X + Y) % 2 == 1 && selection.isSet()) {
-            int diffX = Math.abs(X - selection.target.X);
-            int diffY = Math.abs(Y - selection.target.Y);
-            if (diffX ==1 && diffY == 1) simpleMove(X, Y);
-            else if (diffX == 2 && diffY == 2) kill(X, Y);
+            int diffX = Math.abs(X - selection.getTarget().X);
+            int diffY = Math.abs(Y - selection.getTarget().Y);
+
+            int signedDiffY = Y - selection.getTarget().Y;
+            boolean moveBack = playerSide == PieceType.WHITE ? signedDiffY > 0 : signedDiffY < 0;
+            if (moveBack && !selection.getTarget().isKing()) return;
+
+            if (diffX == 1 && diffY == 1) simpleMove(X, Y);
+            else if (diffX == 2 && diffY == 2) killWithCheck(X, Y);
         }
     }
 
-    private void simpleMove(int X, int Y) {
+    protected void simpleMove(int X, int Y) {
         if (!mustKill) {
-            Piece piece = selection.target;
-            boolean moveBack = (playerSide == PieceType.BLACK) != (X - piece.X > 0);
-            if (!moveBack || piece.isKing()) {
-                moveChecker(piece, X, Y);
-                piece.becomeKing();
-                changePlayer();
-            }
+            Piece piece = selection.getTarget();
+            moveChecker(piece, X, Y);
+            becomeKingWithCheck(piece);
+            changePlayer();
         }
     }
 
-    private void moveChecker(Piece piece, int X, int Y) {
-        pieces[piece.X][piece.Y] = null;
-        pieces[X][Y] = piece;
-        this.getChildren().remove(piece);
-        this.add(piece, X, Y);
+    protected void moveChecker(Piece piece, int X, int Y) {
+        pieces[piece.Y][piece.X] = null;
+        pieces[Y][X] = piece;
         piece.X = X;
         piece.Y = Y;
+
+        view.movePiece(piece);
+
     }
 
-    private void removeCapturedCheckers() {
-        for(Piece captured : capturedCheckers) {
-            pieces[captured.X][captured.Y] = null;
+    protected void removeCapturedChecker(Piece captured) {
+            pieces[captured.Y][captured.X] = null;
             if(playerSide == PieceType.WHITE) blackCheckers.remove(captured);
             else whiteCheckers.remove(captured);
-            this.getChildren().remove(captured);
-        }
+            view.removePiece(captured);
     }
 
-    private void kill(int X, int Y) {
-        Piece piece = selection.target;
-        int capturedX = piece.X + (X - piece.X) / 2;
-        int capturedY = piece.Y + (Y - piece.Y) / 2;
+    protected void killWithCheck(int X, int Y /* куда ходит */ ) {
+        Piece piece = selection.getTarget(); /* кто бьет */
+        int capturedX = piece.X + (X - piece.X) / 2; // кого бьет
+        int capturedY = piece.Y + (Y - piece.Y) / 2; // кого бьет
         if (tileContainsChecker(capturedX, capturedY)) {
-            Piece capturedChecker = pieces[capturedY][capturedX];
+            Piece capturedChecker = pieces[capturedY][capturedX]; // кого бьет
 
-            if (!capturedChecker.hasType(playerSide)) {
+            if (!capturedChecker.hasType(playerSide) && canKillAt(piece, X, Y)) {
                 moveChecker(piece, X, Y);
-                piece.becomeKing();
+                becomeKingWithCheck(piece);
+                removeCapturedChecker(capturedChecker);
                 if (canKill(piece)) {
-                    selectChecker(piece);
+                    selection.setTargetAndSelect(piece);
                     multipleKill = true;
                 } else {
-                    removeCapturedCheckers();
                     multipleKill = false;
-                    changePlayer();
+                    if (gameFinished()) {
+                        if (onGameFinishedListener != null)
+                            onGameFinishedListener.onGameFinished(whiteCheckers.isEmpty() ? PieceType.BLACK : PieceType.WHITE);
+                    } else
+                        changePlayer();
                 }
             }
         }
     }
 
-    private boolean canKill(Piece piece) {
+    protected boolean canKillAt(Piece piece /* кто бьет */, int X, int Y /* куда бьет */) {
+        int diffX = (X - piece.X) / 2;
+        int diffY = (Y - piece.Y) / 2;
+
+        boolean moveBack = playerSide == PieceType.WHITE ? diffY > 0 : diffY < 0;
+        if (moveBack && !piece.isKing()) return false;
+
+        int capturedX = piece.X + diffX;
+        int capturedY = piece.Y + diffY;
+
+        return tileContainsChecker(capturedX, capturedY) &&
+                !pieces[capturedY][capturedX].hasType(playerSide) &&
+                !tileContainsChecker(X, Y);
+    }
+
+    protected boolean canKill(Piece piece /* кто бьет */) {
         int rowShift = 1, colShift = 1, X, Y;
         for(int i = 0, c = 1; i < 4; i++, c *= (-1)) {
             rowShift *= c;
             colShift *= -c;
-            X = piece.X + rowShift;
-            Y = piece.Y + colShift;
+            X = piece.X + colShift; // кого бьем
+            Y = piece.Y + rowShift; // кого бьем
+
+            int signedDiffY = Y - piece.Y;
+            boolean moveBack = playerSide == PieceType.WHITE ? signedDiffY > 0 : signedDiffY < 0;
+            if (moveBack && !piece.isKing()) continue;
+
             if(tileExists(X, Y) && tileContainsChecker(X, Y)
-                    && !pieces[X][Y].hasType(playerSide)
-                    && !capturedCheckers.contains(pieces[X][Y])) {
-                X += rowShift;
-                Y += colShift;
-                if(tileExists(X, Y) && !tileContainsChecker(X, Y)) return true;
+                    && !pieces[Y][X].hasType(playerSide)
+                    && tileExists(X + colShift, Y + rowShift) && !tileContainsChecker(X + colShift, Y + rowShift)
+            ) {
+                return true;
             }
         }
         return false;
     }
 
-    private void changePlayer() {
+    protected void changePlayer() {
         playerSide = playerSide == PieceType.WHITE ? PieceType.BLACK : PieceType.WHITE;
-        this.getChildren().remove(selection);
-        selection.target = null;
-        capturedCheckers.clear();
+        selection.remove();
+        selection.setTarget(null);
         Set<Piece> playerCheckers = playerSide == PieceType.WHITE ? whiteCheckers : blackCheckers;
         mustKill = false;
         for(Piece piece : playerCheckers) {
@@ -166,6 +173,25 @@ public class Field extends GridPane {
                 mustKill = true;
                 break;
             }
+        }
+    }
+
+    protected boolean gameFinished() {
+        return (whiteCheckers.isEmpty() || blackCheckers.isEmpty());
+    }
+
+    public OnGameFinishedListener getOnGameFinishedListener() {
+        return onGameFinishedListener;
+    }
+
+    public void setOnGameFinishedListener(OnGameFinishedListener onGameFinishedListener) {
+        this.onGameFinishedListener = onGameFinishedListener;
+    }
+
+    protected void becomeKingWithCheck(Piece piece) {
+        if (piece.Y == (piece.type == PieceType.WHITE ? 0 : 7)) {
+            piece.becomeKing();
+            view.setKingAppearance(piece);
         }
     }
 }
